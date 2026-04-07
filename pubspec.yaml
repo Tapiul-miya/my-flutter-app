@@ -31,7 +31,7 @@ dependencies:
   flutter:
     sdk: flutter
 
-  upi_india: ^3.0.1
+  upi_pay: ^1.1.0
   cupertino_icons: ^1.0.8
   
   
