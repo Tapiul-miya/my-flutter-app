@@ -21,7 +21,8 @@ class CheckoutScreen extends StatefulWidget {
 class _CheckoutScreenState extends State<CheckoutScreen> {
   String paymentMethod = "COD";
   
-  // ১. ১.১.০ ভার্সনে মেথডগুলো স্ট্যাটিক, তাই আলাদা অবজেক্ট লাগবে না
+  // ১. মেথডগুলো এখন আর Static নয়, তাই একটি instance তৈরি করতে হবে
+  final _upiPay = UpiPay(); 
   List<UpiApplication>? apps; 
 
   @override
@@ -31,10 +32,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   void getUpiApps() async {
-    try { 
-      // ২. সঠিক মেথড নেম: getInstalledUpiApplications (Static মেথড)
-      apps = await UpiPay.getInstalledUpiApplications();
-      setState(() {});
+    try {
+      // ২. Instance (_upiPay) ব্যবহার করে কল করুন
+      final List<UpiApplication> installedApps = await _upiPay.getInstalledUpiApplications();
+      setState(() {
+        apps = installedApps;
+      });
     } catch (e) {
       debugPrint("Error fetching UPI apps: $e");
     }
@@ -93,14 +96,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   Future<void> startTransaction(UpiApplication app, int amount) async {
     try {
-      // ৩. সঠিক মেথড নেম: initiatePayment (Static মেথড)
-      final response = await UpiPay.initiatePayment(
+      // ৩. Instance (_upiPay) ব্যবহার করুন এবং amount অবশ্যই string (যেমন: "1.00") হতে হবে
+      final response = await _upiPay.initiatePayment(
         app: app,
-        receiverUpiAddress: "yourupiid@upi", // ⚠️ আপনার UPI ID দিন
+        receiverUpiAddress: "yourupiid@upi", // ⚠️ আপনার আসল UPI ID দিন
         receiverName: "My Shop",
         transactionRef: "TXN${DateTime.now().millisecondsSinceEpoch}",
         transactionNote: "Order Payment",
-        amount: amount.toStringAsFixed(2),
+        amount: amount.toDouble().toStringAsFixed(2),
       );
 
       checkPaymentStatus(response.status);
