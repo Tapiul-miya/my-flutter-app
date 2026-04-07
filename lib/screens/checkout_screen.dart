@@ -31,7 +31,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   void getUpiApps() async {
-    try {
+    try { 
       // ২. সঠিক মেথড নেম: getInstalledUpiApplications (Static মেথড)
       apps = await UpiPay.getInstalledUpiApplications();
       setState(() {});
