@@ -21,11 +21,8 @@ class CheckoutScreen extends StatefulWidget {
 class _CheckoutScreenState extends State<CheckoutScreen> {
   String paymentMethod = "COD";
   
-  // ১. UpiPay এর একটি অবজেক্ট তৈরি করুন
-  final upiPay = UpiPay(); 
-  
-  // ২. আধুনিক ভার্সনে মেটাডাটা পাওয়ার জন্য ApplicationMeta ব্যবহার করতে হয়
-  List<ApplicationMeta>? apps; 
+  // ১. ১.১.০ ভার্সনে মেথডগুলো স্ট্যাটিক, তাই আলাদা অবজেক্ট লাগবে না
+  List<UpiApplication>? apps; 
 
   @override
   void initState() {
@@ -35,8 +32,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   void getUpiApps() async {
     try {
-      // ৩. অবজেক্ট (upiPay) দিয়ে মেথড কল করুন
-      apps = await upiPay.getInstalledUpiApps();
+      // ২. সঠিক মেথড নেম: getInstalledUpiApplications (Static মেথড)
+      apps = await UpiPay.getInstalledUpiApplications();
       setState(() {});
     } catch (e) {
       debugPrint("Error fetching UPI apps: $e");
@@ -54,35 +51,34 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   void showUpiApps(int amount) {
     if (apps == null || apps!.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("No UPI app found ❗")),
+        const SnackBar(content: Text("No UPI app found ❗")),
       );
       return;
     }
 
     showModalBottomSheet(
       context: context,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) {
         return Container(
-          padding: EdgeInsets.all(15),
+          padding: const EdgeInsets.all(15),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text("Choose Payment App", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              SizedBox(height: 10),
+              const Text("Choose Payment App", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 10),
               Flexible(
                 child: ListView.builder(
                   shrinkWrap: true,
                   itemCount: apps!.length,
                   itemBuilder: (context, index) {
-                    final appMeta = apps![index];
+                    final app = apps![index];
                     return ListTile(
-                      // ৪. আইকন দেখানোর আধুনিক উপায়
-                      leading: appMeta.iconImage(32), 
-                      title: Text(appMeta.upiApplication.getAppName()),
+                      leading: const Icon(Icons.account_balance_wallet, color: Colors.blue),
+                      title: Text(app.getAppName()),
                       onTap: () {
                         Navigator.pop(context);
-                        startTransaction(appMeta, amount);
+                        startTransaction(app, amount);
                       },
                     );
                   },
@@ -95,11 +91,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
-  Future<void> startTransaction(ApplicationMeta appMeta, int amount) async {
+  Future<void> startTransaction(UpiApplication app, int amount) async {
     try {
-      // ৫. initiateTransaction ব্যবহার করুন এবং অবজেক্ট দিয়ে কল করুন
-      final response = await upiPay.initiateTransaction(
-        app: appMeta.upiApplication,
+      // ৩. সঠিক মেথড নেম: initiatePayment (Static মেথড)
+      final response = await UpiPay.initiatePayment(
+        app: app,
         receiverUpiAddress: "yourupiid@upi", // ⚠️ আপনার UPI ID দিন
         receiverName: "My Shop",
         transactionRef: "TXN${DateTime.now().millisecondsSinceEpoch}",
@@ -118,15 +114,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   void checkPaymentStatus(UpiTransactionStatus? status) {
     if (status == UpiTransactionStatus.success) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Payment Successful ✅"), backgroundColor: Colors.green),
+        const SnackBar(content: Text("Payment Successful ✅"), backgroundColor: Colors.green),
       );
     } else if (status == UpiTransactionStatus.failure) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Payment Failed ❌"), backgroundColor: Colors.red),
+        const SnackBar(content: Text("Payment Failed ❌"), backgroundColor: Colors.red),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Payment Cancelled/Pending ⏳")),
+        const SnackBar(content: Text("Payment Cancelled/Pending ⏳")),
       );
     }
   }
@@ -135,17 +131,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   Widget build(BuildContext context) {
     int totalPrice = getTotalPrice();
     return Scaffold(
-      appBar: AppBar(title: Text("Checkout")),
+      appBar: AppBar(title: const Text("Checkout")),
       body: Padding(
-        padding: EdgeInsets.all(15),
+        padding: const EdgeInsets.all(15),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("Customer Details", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            SizedBox(height: 10),
+            const Text("Customer Details", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
             Card(
               child: Padding(
-                padding: EdgeInsets.all(10),
+                padding: const EdgeInsets.all(10),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -156,9 +152,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 ),
               ),
             ),
-            SizedBox(height: 15),
-            Text("Order Summary", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            SizedBox(height: 10),
+            const SizedBox(height: 15),
+            const Text("Order Summary", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
             Expanded(
               child: ListView.builder(
                 itemCount: widget.cartItems.length,
@@ -172,35 +168,35 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 },
               ),
             ),
-            Divider(),
-            Text("Total: ₹$totalPrice", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            SizedBox(height: 10),
-            Text("Payment Method", style: TextStyle(fontWeight: FontWeight.bold)),
+            const Divider(),
+            Text("Total: ₹$totalPrice", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
+            const Text("Payment Method", style: TextStyle(fontWeight: FontWeight.bold)),
             RadioListTile(
-              title: Text("Cash on Delivery"),
+              title: const Text("Cash on Delivery"),
               value: "COD",
               groupValue: paymentMethod,
               onChanged: (val) => setState(() => paymentMethod = val.toString()),
             ),
             RadioListTile(
-              title: Text("UPI Payment"),
+              title: const Text("UPI Payment"),
               value: "UPI",
               groupValue: paymentMethod,
               onChanged: (val) => setState(() => paymentMethod = val.toString()),
             ),
-            SizedBox(height: 10),
+            const SizedBox(height: 10),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, padding: EdgeInsets.all(15)),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, padding: const EdgeInsets.all(15)),
                 onPressed: () {
                   if (paymentMethod == "COD") {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Order placed with COD 🚀")));
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Order placed with COD 🚀")));
                   } else {
                     showUpiApps(totalPrice);
                   }
                 },
-                child: Text("Place Order", style: TextStyle(color: Colors.white, fontSize: 16)),
+                child: const Text("Place Order", style: TextStyle(color: Colors.white, fontSize: 16)),
               ),
             )
           ],
