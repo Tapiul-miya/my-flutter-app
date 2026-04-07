@@ -20,7 +20,12 @@ class CheckoutScreen extends StatefulWidget {
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
   String paymentMethod = "COD";
-  List<UpiApplication>? apps;
+  
+  // ১. UpiPay এর একটি অবজেক্ট তৈরি করুন
+  final upiPay = UpiPay(); 
+  
+  // ২. আধুনিক ভার্সনে মেটাডাটা পাওয়ার জন্য ApplicationMeta ব্যবহার করতে হয়
+  List<ApplicationMeta>? apps; 
 
   @override
   void initState() {
@@ -28,10 +33,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     getUpiApps();
   }
 
-  // ✅ সঠিক মেথড নেম: getInstalledUpiApps
   void getUpiApps() async {
     try {
-      apps = await UpiPay.getInstalledUpiApps();
+      // ৩. অবজেক্ট (upiPay) দিয়ে মেথড কল করুন
+      apps = await upiPay.getInstalledUpiApps();
       setState(() {});
     } catch (e) {
       debugPrint("Error fetching UPI apps: $e");
@@ -46,7 +51,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     return total;
   }
 
-  // 🔥 UPI App chooser UI
   void showUpiApps(int amount) {
     if (apps == null || apps!.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -71,13 +75,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   shrinkWrap: true,
                   itemCount: apps!.length,
                   itemBuilder: (context, index) {
-                    final app = apps![index];
+                    final appMeta = apps![index];
                     return ListTile(
-                      leading: Icon(Icons.account_balance_wallet, color: Colors.blue),
-                      title: Text(app.getAppName()),
+                      // ৪. আইকন দেখানোর আধুনিক উপায়
+                      leading: appMeta.iconImage(32), 
+                      title: Text(appMeta.upiApplication.getAppName()),
                       onTap: () {
                         Navigator.pop(context);
-                        startTransaction(app, amount);
+                        startTransaction(appMeta, amount);
                       },
                     );
                   },
@@ -90,11 +95,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
-  // 💳 সঠিক মেথড নেম: initiatePayment
-  Future<void> startTransaction(UpiApplication app, int amount) async {
+  Future<void> startTransaction(ApplicationMeta appMeta, int amount) async {
     try {
-      final response = await UpiPay.initiatePayment(
-        app: app,
+      // ৫. initiateTransaction ব্যবহার করুন এবং অবজেক্ট দিয়ে কল করুন
+      final response = await upiPay.initiateTransaction(
+        app: appMeta.upiApplication,
         receiverUpiAddress: "yourupiid@upi", // ⚠️ আপনার UPI ID দিন
         receiverName: "My Shop",
         transactionRef: "TXN${DateTime.now().millisecondsSinceEpoch}",
@@ -110,7 +115,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
   }
 
-  // ✅ Payment Result handling
   void checkPaymentStatus(UpiTransactionStatus? status) {
     if (status == UpiTransactionStatus.success) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -130,7 +134,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   @override
   Widget build(BuildContext context) {
     int totalPrice = getTotalPrice();
-
     return Scaffold(
       appBar: AppBar(title: Text("Checkout")),
       body: Padding(
