@@ -21,9 +21,11 @@ class CheckoutScreen extends StatefulWidget {
 class _CheckoutScreenState extends State<CheckoutScreen> {
   String paymentMethod = "COD";
   
-  // ১. মেথডগুলো এখন আর Static নয়, তাই একটি instance তৈরি করতে হবে
+  // ১. মেথডগুলো Static নয়, তাই instance তৈরি করা হয়েছে
   final _upiPay = UpiPay(); 
-  List<UpiApplication>? apps; 
+  
+  // ২. টাইপ List<ApplicationMeta> করা হয়েছে
+  List<ApplicationMeta>? apps; 
 
   @override
   void initState() {
@@ -33,8 +35,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   void getUpiApps() async {
     try {
-      // ২. Instance (_upiPay) ব্যবহার করে কল করুন
-      final List<UpiApplication> installedApps = await _upiPay.getInstalledUpiApplications();
+      final List<ApplicationMeta> installedApps = await _upiPay.getInstalledUpiApplications();
       setState(() {
         apps = installedApps;
       });
@@ -75,13 +76,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   shrinkWrap: true,
                   itemCount: apps!.length,
                   itemBuilder: (context, index) {
-                    final app = apps![index];
+                    final appMeta = apps![index];
                     return ListTile(
                       leading: const Icon(Icons.account_balance_wallet, color: Colors.blue),
-                      title: Text(app.getAppName()),
+                      title: Text(appMeta.upiApplication.getAppName()),
                       onTap: () {
                         Navigator.pop(context);
-                        startTransaction(app, amount);
+                        startTransaction(appMeta.upiApplication, amount);
                       },
                     );
                   },
@@ -96,8 +97,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   Future<void> startTransaction(UpiApplication app, int amount) async {
     try {
-      // ৩. Instance (_upiPay) ব্যবহার করুন এবং amount অবশ্যই string (যেমন: "1.00") হতে হবে
-      final response = await _upiPay.initiatePayment(
+      // ৩. এখানে 'initiatePayment' বদলে 'initiateTransaction' করা হয়েছে
+      final response = await _upiPay.initiateTransaction(
         app: app,
         receiverUpiAddress: "yourupiid@upi", // ⚠️ আপনার আসল UPI ID দিন
         receiverName: "My Shop",
