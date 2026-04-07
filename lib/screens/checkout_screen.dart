@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:upi_pay/upi_pay.dart'; // পরিবর্তিত ইমপোর্ট
+import 'package:upi_pay/upi_pay.dart';
 
 class CheckoutScreen extends StatefulWidget {
   final List<Map<String, dynamic>> cartItems;
@@ -20,7 +20,7 @@ class CheckoutScreen extends StatefulWidget {
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
   String paymentMethod = "COD";
-  List<UpiApplication>? apps; // UpiApp থেকে UpiApplication হয়েছে
+  List<UpiApplication>? apps;
 
   @override
   void initState() {
@@ -28,10 +28,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     getUpiApps();
   }
 
+  // ✅ সঠিক মেথড নেম: getInstalledUpiApps
   void getUpiApps() async {
-    // upi_pay তে সরাসরি Static মেথড ব্যবহার করা যায়
-    apps = await UpiPay.getInstalledUpiApplications();
-    setState(() {});
+    try {
+      apps = await UpiPay.getInstalledUpiApps();
+      setState(() {});
+    } catch (e) {
+      debugPrint("Error fetching UPI apps: $e");
+    }
   }
 
   int getTotalPrice() {
@@ -42,7 +46,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     return total;
   }
 
-  // 🔥 UPI App chooser
+  // 🔥 UPI App chooser UI
   void showUpiApps(int amount) {
     if (apps == null || apps!.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -53,35 +57,49 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     showModalBottomSheet(
       context: context,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) {
-        return ListView(
-          padding: EdgeInsets.all(10),
-          children: apps!.map((app) {
-            return ListTile(
-              // upi_pay তে আইকন সরাসরি Widget হিসেবে পাওয়া যায় না, নাম দেখান ভালো
-              leading: Icon(Icons.account_balance_wallet), 
-              title: Text(app.getAppName()),
-              onTap: () {
-                Navigator.pop(context);
-                startTransaction(app, amount);
-              },
-            );
-          }).toList(),
+        return Container(
+          padding: EdgeInsets.all(15),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text("Choose Payment App", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              SizedBox(height: 10),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: apps!.length,
+                  itemBuilder: (context, index) {
+                    final app = apps![index];
+                    return ListTile(
+                      leading: Icon(Icons.account_balance_wallet, color: Colors.blue),
+                      title: Text(app.getAppName()),
+                      onTap: () {
+                        Navigator.pop(context);
+                        startTransaction(app, amount);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
         );
       },
     );
   }
 
-  // 💳 Start UPI Transaction
+  // 💳 সঠিক মেথড নেম: initiatePayment
   Future<void> startTransaction(UpiApplication app, int amount) async {
     try {
-      final response = await UpiPay.initiateTransaction(
+      final response = await UpiPay.initiatePayment(
         app: app,
         receiverUpiAddress: "yourupiid@upi", // ⚠️ আপনার UPI ID দিন
         receiverName: "My Shop",
         transactionRef: "TXN${DateTime.now().millisecondsSinceEpoch}",
         transactionNote: "Order Payment",
-        amount: amount.toStringAsFixed(2), // String ফরম্যাটে দিতে হয়
+        amount: amount.toStringAsFixed(2),
       );
 
       checkPaymentStatus(response.status);
@@ -92,15 +110,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
   }
 
-  // ✅ Payment Result
+  // ✅ Payment Result handling
   void checkPaymentStatus(UpiTransactionStatus? status) {
     if (status == UpiTransactionStatus.success) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Payment Successful ✅")),
+        SnackBar(content: Text("Payment Successful ✅"), backgroundColor: Colors.green),
       );
     } else if (status == UpiTransactionStatus.failure) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Payment Failed ❌")),
+        SnackBar(content: Text("Payment Failed ❌"), backgroundColor: Colors.red),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -112,7 +130,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   @override
   Widget build(BuildContext context) {
     int totalPrice = getTotalPrice();
-    // ... আপনার বাকি UI কোড একদম একই থাকবে
+
     return Scaffold(
       appBar: AppBar(title: Text("Checkout")),
       body: Padding(
@@ -179,7 +197,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     showUpiApps(totalPrice);
                   }
                 },
-                child: Text("Place Order"),
+                child: Text("Place Order", style: TextStyle(color: Colors.white, fontSize: 16)),
               ),
             )
           ],
