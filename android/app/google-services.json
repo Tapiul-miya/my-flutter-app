@@ -1,0 +1,24 @@
+{
+  "project_info": {
+    "project_number": "436543886888",
+    "firebase_url": "https://myapp-bec98-default-rtdb.firebaseio.com",
+    "project_id": "myapp-bec98",
+    "storage_bucket": "myapp-bec98.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:436543886888:android:d63811332309b1c4a2c71d",
+        "android_client_info": {
+          "package_name": "com.example.demo_app"
+        }
+      },
+      "api_key": [
+        {
+          "current_key": "AIzaSyACHwRWdezxYtSV8XVu39riCEnrfOyMWZg"
+        }
+      ]
+    }
+  ],
+  "configuration_version": "1"
+}

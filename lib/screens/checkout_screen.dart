@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:upi_pay/upi_pay.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'order_success_screen.dart';
+
+enum PaymentMethod { cod, online }
+enum PaymentApp { phonepe, gpay, paytm }
 
 class CheckoutScreen extends StatefulWidget {
   final List<Map<String, dynamic>> cartItems;
@@ -7,7 +11,8 @@ class CheckoutScreen extends StatefulWidget {
   final String phone;
   final String address;
 
-  CheckoutScreen({
+  const CheckoutScreen({
+    super.key,
     required this.cartItems,
     required this.name,
     required this.phone,
@@ -15,36 +20,16 @@ class CheckoutScreen extends StatefulWidget {
   });
 
   @override
-  _CheckoutScreenState createState() => _CheckoutScreenState();
+  State<CheckoutScreen> createState() => _CheckoutScreenState();
 }
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
-  String paymentMethod = "COD";
-  
-  // ১. মেথডগুলো Static নয়, তাই instance তৈরি করা হয়েছে
-  final _upiPay = UpiPay(); 
-  
-  // ২. টাইপ List<ApplicationMeta> করা হয়েছে
-  List<ApplicationMeta>? apps; 
+  PaymentMethod selectedMethod = PaymentMethod.cod;
+  PaymentApp? selectedApp;
 
-  @override
-  void initState() {
-    super.initState();
-    getUpiApps();
-  }
+  final int deliveryFee = 40;
 
-  void getUpiApps() async {
-    try {
-      final List<ApplicationMeta> installedApps = await _upiPay.getInstalledUpiApplications();
-      setState(() {
-        apps = installedApps;
-      });
-    } catch (e) {
-      debugPrint("Error fetching UPI apps: $e");
-    }
-  }
-
-  int getTotalPrice() {
+  int getSubtotal() {
     int total = 0;
     for (var item in widget.cartItems) {
       total += (item["qty"] as int) * (item["price"] as int);
@@ -52,158 +37,271 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     return total;
   }
 
-  void showUpiApps(int amount) {
-    if (apps == null || apps!.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("No UPI app found ❗")),
-      );
-      return;
+  Future<void> openSelectedApp(int amount) async {
+    String url = "";
+
+    switch (selectedApp) {
+      case PaymentApp.phonepe:
+        url = "phonepe://pay?pa=tapiul@ybl&pn=My Shop&am=$amount&cu=INR";
+        break;
+      case PaymentApp.gpay:
+        url = "tez://upi/pay?pa=tapiul@ybl&pn=My Shop&am=$amount&cu=INR";
+        break;
+      case PaymentApp.paytm:
+        url = "paytmmp://pay?pa=tapiul@ybl&pn=My Shop&am=$amount&cu=INR";
+        break;
+      default:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Select payment app ❗")),
+        );
+        return;
     }
 
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (context) {
-        return Container(
-          padding: const EdgeInsets.all(15),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text("Choose Payment App", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 10),
-              Flexible(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: apps!.length,
-                  itemBuilder: (context, index) {
-                    final appMeta = apps![index];
-                    return ListTile(
-                      leading: const Icon(Icons.account_balance_wallet, color: Colors.blue),
-                      title: Text(appMeta.upiApplication.getAppName()),
-                      onTap: () {
-                        Navigator.pop(context);
-                        startTransaction(appMeta.upiApplication, amount);
-                      },
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> startTransaction(UpiApplication app, int amount) async {
     try {
-      // ৩. এখানে 'initiatePayment' বদলে 'initiateTransaction' করা হয়েছে
-      final response = await _upiPay.initiateTransaction(
-        app: app,
-        receiverUpiAddress: "yourupiid@upi", // ⚠️ আপনার আসল UPI ID দিন
-        receiverName: "My Shop",
-        transactionRef: "TXN${DateTime.now().millisecondsSinceEpoch}",
-        transactionNote: "Order Payment",
-        amount: amount.toDouble().toStringAsFixed(2),
-      );
-
-      checkPaymentStatus(response.status);
+      await launchUrl(Uri.parse(url),
+          mode: LaunchMode.externalApplication);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
-      );
-    }
-  }
-
-  void checkPaymentStatus(UpiTransactionStatus? status) {
-    if (status == UpiTransactionStatus.success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Payment Successful ✅"), backgroundColor: Colors.green),
-      );
-    } else if (status == UpiTransactionStatus.failure) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Payment Failed ❌"), backgroundColor: Colors.red),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Payment Cancelled/Pending ⏳")),
+        const SnackBar(content: Text("App open hocche na ❗")),
       );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    int totalPrice = getTotalPrice();
+    int subtotal = getSubtotal();
+    int grandTotal = subtotal + deliveryFee;
+
     return Scaffold(
-      appBar: AppBar(title: const Text("Checkout")),
-      body: Padding(
-        padding: const EdgeInsets.all(15),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text("Customer Details", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text("Name: ${widget.name}"),
-                    Text("Phone: ${widget.phone}"),
-                    Text("Address: ${widget.address}"),
-                  ],
+      appBar: AppBar(
+        title: const Text("Checkout"),
+        centerTitle: true,
+      ),
+
+      /// 🔥 Bottom Fixed Button (NO OVERFLOW)
+      bottomNavigationBar: SafeArea(
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          child: ElevatedButton.icon(
+            icon: const Icon(Icons.check_circle),
+            label: Text("Place Order • ₹$grandTotal"),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              padding: const EdgeInsets.all(15),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () {
+              if (selectedMethod == PaymentMethod.cod) {
+                
+                Navigator.push(
+  context,
+  MaterialPageRoute(
+    builder: (_) => OrderSuccessScreen(
+      orderId: DateTime.now().millisecondsSinceEpoch.toString(),
+      amount: grandTotal,
+      isPaid: selectedMethod == PaymentMethod.online,
+    ),
+  ),
+);
+                
+                
+              } else {
+                openSelectedApp(grandTotal);
+              }
+            },
+          ),
+        ),
+      ),
+
+      /// 🔥 Scrollable Body (NO OVERFLOW)
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(15),
+          child: Column(
+            children: [
+
+              /// 🔹 Customer Info
+              Card(
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                elevation: 3,
+                child: ListTile(
+                  leading:
+                      const Icon(Icons.person, color: Colors.orange),
+                  title: Text(widget.name,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold)),
+                  subtitle: Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: [
+                      Text(widget.phone),
+                      Text(widget.address),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 15),
-            const Text("Order Summary", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-            Expanded(
-              child: ListView.builder(
+
+              const SizedBox(height: 15),
+
+              /// 🔹 Order Summary
+              Row(
+                children: const [
+                  Icon(Icons.shopping_cart,
+                      color: Colors.orange),
+                  SizedBox(width: 8),
+                  Text("Order Summary",
+                      style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold)),
+                ],
+              ),
+
+              const SizedBox(height: 10),
+
+              ListView.builder(
+                shrinkWrap: true,
+                physics:
+                    const NeverScrollableScrollPhysics(),
                 itemCount: widget.cartItems.length,
-                itemBuilder: (context, index) {
+                itemBuilder: (_, index) {
                   final item = widget.cartItems[index];
-                  return ListTile(
-                    title: Text(item["name"]),
-                    subtitle: Text("Qty: ${item["qty"]}"),
-                    trailing: Text("₹${item["price"] * item["qty"]}"),
+
+                  return Card(
+                    margin:
+                        const EdgeInsets.symmetric(vertical: 5),
+                    child: ListTile(
+                      leading: const Icon(Icons.fastfood,
+                          color: Colors.orange),
+                      title: Text(item["name"]),
+                      subtitle:
+                          Text("Qty: ${item["qty"]}"),
+                      trailing: Text(
+                        "₹${item["price"] * item["qty"]}",
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold),
+                      ),
+                    ),
                   );
                 },
               ),
-            ),
-            const Divider(),
-            Text("Total: ₹$totalPrice", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-            const Text("Payment Method", style: TextStyle(fontWeight: FontWeight.bold)),
-            RadioListTile(
-              title: const Text("Cash on Delivery"),
-              value: "COD",
-              groupValue: paymentMethod,
-              onChanged: (val) => setState(() => paymentMethod = val.toString()),
-            ),
-            RadioListTile(
-              title: const Text("UPI Payment"),
-              value: "UPI",
-              groupValue: paymentMethod,
-              onChanged: (val) => setState(() => paymentMethod = val.toString()),
-            ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, padding: const EdgeInsets.all(15)),
-                onPressed: () {
-                  if (paymentMethod == "COD") {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Order placed with COD 🚀")));
-                  } else {
-                    showUpiApps(totalPrice);
-                  }
-                },
-                child: const Text("Place Order", style: TextStyle(color: Colors.white, fontSize: 16)),
+
+              const SizedBox(height: 10),
+
+              /// 🔹 Price Breakdown
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius:
+                      BorderRadius.circular(10),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment:
+                          MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text("Subtotal"),
+                        Text("₹$subtotal"),
+                      ],
+                    ),
+                    const SizedBox(height: 5),
+                    Row(
+                      mainAxisAlignment:
+                          MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text("Delivery Fee"),
+                        Text("₹$deliveryFee"),
+                      ],
+                    ),
+                    const Divider(),
+                    Row(
+                      mainAxisAlignment:
+                          MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text("Grand Total",
+                            style: TextStyle(
+                                fontWeight:
+                                    FontWeight.bold)),
+                        Text(
+                          "₹$grandTotal",
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.orange,
+                              fontSize: 16),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            )
-          ],
+
+              const SizedBox(height: 15),
+
+              /// 🔹 Payment Method
+              Row(
+                children: const [
+                  Icon(Icons.payment,
+                      color: Colors.orange),
+                  SizedBox(width: 8),
+                  Text("Payment Method",
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold)),
+                ],
+              ),
+
+              RadioListTile(
+                value: PaymentMethod.cod,
+                groupValue: selectedMethod,
+                onChanged: (val) =>
+                    setState(() => selectedMethod = val!),
+                title: const Text("Cash on Delivery"),
+                secondary: const Icon(Icons.money),
+              ),
+
+              RadioListTile(
+                value: PaymentMethod.online,
+                groupValue: selectedMethod,
+                onChanged: (val) =>
+                    setState(() => selectedMethod = val!),
+                title: const Text("Online Payment"),
+                secondary: const Icon(Icons.qr_code),
+              ),
+
+              if (selectedMethod == PaymentMethod.online) ...[
+                RadioListTile(
+                  value: PaymentApp.phonepe,
+                  groupValue: selectedApp,
+                  onChanged: (val) =>
+                      setState(() => selectedApp = val),
+                  title: const Text("PhonePe"),
+                  secondary:
+                      const Icon(Icons.phone_android),
+                ),
+                RadioListTile(
+                  value: PaymentApp.gpay,
+                  groupValue: selectedApp,
+                  onChanged: (val) =>
+                      setState(() => selectedApp = val),
+                  title: const Text("Google Pay"),
+                  secondary: const Icon(
+                      Icons.account_balance),
+                ),
+                RadioListTile(
+                  value: PaymentApp.paytm,
+                  groupValue: selectedApp,
+                  onChanged: (val) =>
+                      setState(() => selectedApp = val),
+                  title: const Text("Paytm"),
+                  secondary: const Icon(Icons.wallet),
+                ),
+              ],
+
+              const SizedBox(height: 80), // 🔥 space for button
+            ],
+          ),
         ),
       ),
     );

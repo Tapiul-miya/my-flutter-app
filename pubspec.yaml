@@ -33,8 +33,12 @@ dependencies:
 
   upi_pay: ^1.1.0
   cupertino_icons: ^1.0.8
+  url_launcher: ^6.2.5
   
   
+  firebase_core: ^2.30.0
+  firebase_auth: ^4.17.0
+  cloud_firestore: ^4.15.0
   
 
 dev_dependencies:
