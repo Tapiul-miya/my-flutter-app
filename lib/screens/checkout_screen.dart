@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'order_success_screen.dart';
 
 enum PaymentMethod { cod, online }
@@ -24,8 +26,11 @@ class CheckoutScreen extends StatefulWidget {
 }
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
+
   PaymentMethod selectedMethod = PaymentMethod.cod;
   PaymentApp? selectedApp;
+
+  bool loading = false;
 
   final int deliveryFee = 40;
 
@@ -37,273 +42,268 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     return total;
   }
 
-  Future<void> openSelectedApp(int amount) async {
+  // 🔥 Save Order
+  Future<void> placeOrder(int totalAmount) async {
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+
+    await FirebaseFirestore.instance.collection("orders").add({
+      "userId": uid,
+      "name": widget.name,
+      "phone": widget.phone,
+      "address": widget.address,
+      "items": widget.cartItems,
+      "totalAmount": totalAmount,
+      "paymentMethod":
+          selectedMethod == PaymentMethod.cod ? "COD" : "ONLINE",
+      "isPaid": selectedMethod == PaymentMethod.online,
+      "status": "Pending",
+      "createdAt": Timestamp.now(),
+    });
+  }
+
+  // 🔥 Open Payment App
+  Future<void> openPayment(int amount) async {
     String url = "";
 
     switch (selectedApp) {
       case PaymentApp.phonepe:
-        url = "phonepe://pay?pa=tapiul@ybl&pn=My Shop&am=$amount&cu=INR";
+        url = "phonepe://pay?pa=tapiul@ybl&pn=MyShop&am=$amount&cu=INR";
         break;
       case PaymentApp.gpay:
-        url = "tez://upi/pay?pa=tapiul@ybl&pn=My Shop&am=$amount&cu=INR";
+        url = "tez://upi/pay?pa=tapiul@ybl&pn=MyShop&am=$amount&cu=INR";
         break;
       case PaymentApp.paytm:
-        url = "paytmmp://pay?pa=tapiul@ybl&pn=My Shop&am=$amount&cu=INR";
+        url = "paytmmp://pay?pa=tapiul@ybl&pn=MyShop&am=$amount&cu=INR";
         break;
       default:
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Select payment app ❗")),
-        );
         return;
     }
 
+    await launchUrl(Uri.parse(url),
+        mode: LaunchMode.externalApplication);
+  }
+
+  // 🔥 Place Order Action
+  Future<void> handleOrder(int total) async {
+
+    if (selectedMethod == PaymentMethod.online && selectedApp == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Select payment app ❗")),
+      );
+      return;
+    }
+
+    setState(() => loading = true);
+
     try {
-      await launchUrl(Uri.parse(url),
-          mode: LaunchMode.externalApplication);
+      await placeOrder(total);
+
+      if (selectedMethod == PaymentMethod.online) {
+        await openPayment(total);
+      }
+
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => OrderSuccessScreen(
+              orderId: DateTime.now()
+                  .millisecondsSinceEpoch
+                  .toString(),
+              amount: total,
+              isPaid: selectedMethod == PaymentMethod.online,
+            ),
+          ),
+        );
+      }
+
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("App open hocche na ❗")),
+        const SnackBar(content: Text("Order failed ❗")),
       );
     }
+
+    if (mounted) setState(() => loading = false);
   }
 
   @override
   Widget build(BuildContext context) {
     int subtotal = getSubtotal();
-    int grandTotal = subtotal + deliveryFee;
+    int total = subtotal + deliveryFee;
 
     return Scaffold(
+      backgroundColor: Colors.grey.shade100,
+
       appBar: AppBar(
         title: const Text("Checkout"),
         centerTitle: true,
       ),
 
-      /// 🔥 Bottom Fixed Button (NO OVERFLOW)
       bottomNavigationBar: SafeArea(
-        child: Container(
-          padding: const EdgeInsets.all(10),
-          child: ElevatedButton.icon(
-            icon: const Icon(Icons.check_circle),
-            label: Text("Place Order • ₹$grandTotal"),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: ElevatedButton(
+            onPressed: loading ? null : () => handleOrder(total),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.orange,
               padding: const EdgeInsets.all(15),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10)),
             ),
-            onPressed: () {
-              if (selectedMethod == PaymentMethod.cod) {
-                
-                Navigator.push(
-  context,
-  MaterialPageRoute(
-    builder: (_) => OrderSuccessScreen(
-      orderId: DateTime.now().millisecondsSinceEpoch.toString(),
-      amount: grandTotal,
-      isPaid: selectedMethod == PaymentMethod.online,
-    ),
-  ),
-);
-                
-                
-              } else {
-                openSelectedApp(grandTotal);
-              }
-            },
+            child: loading
+                ? const CircularProgressIndicator(
+                    color: Colors.white)
+                : Text(
+                    "Place Order • ₹$total",
+                    style: const TextStyle(fontSize: 16),
+                  ),
           ),
         ),
       ),
 
-      /// 🔥 Scrollable Body (NO OVERFLOW)
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(15),
-          child: Column(
-            children: [
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(15),
+        child: Column(
+          children: [
 
-              /// 🔹 Customer Info
-              Card(
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                elevation: 3,
+            // 👤 User Info
+            _sectionCard(
+              child: ListTile(
+                leading: const Icon(Icons.person,
+                    color: Colors.orange),
+                title: Text(widget.name,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold)),
+                subtitle: Text(
+                    "${widget.phone}\n${widget.address}"),
+              ),
+            ),
+
+            const SizedBox(height: 15),
+
+            // 🛒 Items
+            _sectionTitle("Order Items"),
+
+            ...widget.cartItems.map((item) {
+              if (item["qty"] == 0) return SizedBox();
+
+              return Card(
                 child: ListTile(
-                  leading:
-                      const Icon(Icons.person, color: Colors.orange),
-                  title: Text(widget.name,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold)),
-                  subtitle: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
-                    children: [
-                      Text(widget.phone),
-                      Text(widget.address),
-                    ],
+                  leading: const Icon(Icons.fastfood,
+                      color: Colors.orange),
+                  title: Text(item["name"]),
+                  subtitle: Text("Qty: ${item["qty"]}"),
+                  trailing: Text(
+                    "₹${item["price"] * item["qty"]}",
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold),
                   ),
                 ),
-              ),
+              );
+            }),
 
-              const SizedBox(height: 15),
+            const SizedBox(height: 15),
 
-              /// 🔹 Order Summary
-              Row(
-                children: const [
-                  Icon(Icons.shopping_cart,
-                      color: Colors.orange),
-                  SizedBox(width: 8),
-                  Text("Order Summary",
-                      style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold)),
+            // 💰 Price
+            _sectionCard(
+              child: Column(
+                children: [
+                  _priceRow("Subtotal", subtotal),
+                  _priceRow("Delivery", deliveryFee),
+                  const Divider(),
+                  _priceRow("Total", total, bold: true),
                 ],
               ),
+            ),
 
-              const SizedBox(height: 10),
+            const SizedBox(height: 15),
 
-              ListView.builder(
-                shrinkWrap: true,
-                physics:
-                    const NeverScrollableScrollPhysics(),
-                itemCount: widget.cartItems.length,
-                itemBuilder: (_, index) {
-                  final item = widget.cartItems[index];
+            // 💳 Payment
+            _sectionTitle("Payment Method"),
 
-                  return Card(
-                    margin:
-                        const EdgeInsets.symmetric(vertical: 5),
-                    child: ListTile(
-                      leading: const Icon(Icons.fastfood,
-                          color: Colors.orange),
-                      title: Text(item["name"]),
-                      subtitle:
-                          Text("Qty: ${item["qty"]}"),
-                      trailing: Text(
-                        "₹${item["price"] * item["qty"]}",
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  );
-                },
-              ),
+            RadioListTile(
+              value: PaymentMethod.cod,
+              groupValue: selectedMethod,
+              onChanged: (v) =>
+                  setState(() => selectedMethod = v!),
+              title: const Text("Cash on Delivery"),
+            ),
 
-              const SizedBox(height: 10),
+            RadioListTile(
+              value: PaymentMethod.online,
+              groupValue: selectedMethod,
+              onChanged: (v) =>
+                  setState(() => selectedMethod = v!),
+              title: const Text("Online Payment"),
+            ),
 
-              /// 🔹 Price Breakdown
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.orange.shade50,
-                  borderRadius:
-                      BorderRadius.circular(10),
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment:
-                          MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text("Subtotal"),
-                        Text("₹$subtotal"),
-                      ],
-                    ),
-                    const SizedBox(height: 5),
-                    Row(
-                      mainAxisAlignment:
-                          MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text("Delivery Fee"),
-                        Text("₹$deliveryFee"),
-                      ],
-                    ),
-                    const Divider(),
-                    Row(
-                      mainAxisAlignment:
-                          MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text("Grand Total",
-                            style: TextStyle(
-                                fontWeight:
-                                    FontWeight.bold)),
-                        Text(
-                          "₹$grandTotal",
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.orange,
-                              fontSize: 16),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 15),
-
-              /// 🔹 Payment Method
-              Row(
-                children: const [
-                  Icon(Icons.payment,
-                      color: Colors.orange),
-                  SizedBox(width: 8),
-                  Text("Payment Method",
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold)),
-                ],
-              ),
-
-              RadioListTile(
-                value: PaymentMethod.cod,
-                groupValue: selectedMethod,
-                onChanged: (val) =>
-                    setState(() => selectedMethod = val!),
-                title: const Text("Cash on Delivery"),
-                secondary: const Icon(Icons.money),
-              ),
-
-              RadioListTile(
-                value: PaymentMethod.online,
-                groupValue: selectedMethod,
-                onChanged: (val) =>
-                    setState(() => selectedMethod = val!),
-                title: const Text("Online Payment"),
-                secondary: const Icon(Icons.qr_code),
-              ),
-
-              if (selectedMethod == PaymentMethod.online) ...[
-                RadioListTile(
-                  value: PaymentApp.phonepe,
-                  groupValue: selectedApp,
-                  onChanged: (val) =>
-                      setState(() => selectedApp = val),
-                  title: const Text("PhonePe"),
-                  secondary:
-                      const Icon(Icons.phone_android),
-                ),
-                RadioListTile(
-                  value: PaymentApp.gpay,
-                  groupValue: selectedApp,
-                  onChanged: (val) =>
-                      setState(() => selectedApp = val),
-                  title: const Text("Google Pay"),
-                  secondary: const Icon(
-                      Icons.account_balance),
-                ),
-                RadioListTile(
-                  value: PaymentApp.paytm,
-                  groupValue: selectedApp,
-                  onChanged: (val) =>
-                      setState(() => selectedApp = val),
-                  title: const Text("Paytm"),
-                  secondary: const Icon(Icons.wallet),
-                ),
-              ],
-
-              const SizedBox(height: 80), // 🔥 space for button
+            if (selectedMethod == PaymentMethod.online) ...[
+              _paymentOption("PhonePe", PaymentApp.phonepe),
+              _paymentOption("Google Pay", PaymentApp.gpay),
+              _paymentOption("Paytm", PaymentApp.paytm),
             ],
-          ),
+
+            const SizedBox(height: 80),
+          ],
         ),
       ),
+    );
+  }
+
+  // 🔹 Widgets
+
+  Widget _sectionCard({required Widget child}) {
+    return Card(
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: child,
+      ),
+    );
+  }
+
+  Widget _sectionTitle(String text) {
+    return Row(
+      children: [
+        const Icon(Icons.circle, size: 8, color: Colors.orange),
+        const SizedBox(width: 8),
+        Text(text,
+            style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16)),
+      ],
+    );
+  }
+
+  Widget _priceRow(String title, int value,
+      {bool bold = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment:
+            MainAxisAlignment.spaceBetween,
+        children: [
+          Text(title),
+          Text(
+            "₹$value",
+            style: TextStyle(
+              fontWeight:
+                  bold ? FontWeight.bold : FontWeight.normal,
+              color: bold ? Colors.orange : null,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _paymentOption(String title, PaymentApp app) {
+    return RadioListTile(
+      value: app,
+      groupValue: selectedApp,
+      onChanged: (v) => setState(() => selectedApp = v),
+      title: Text(title),
     );
   }
 }

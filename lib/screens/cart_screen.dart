@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'checkout_screen.dart';
 
 class CartScreen extends StatefulWidget {
@@ -11,6 +13,42 @@ class CartScreen extends StatefulWidget {
 }
 
 class _CartScreenState extends State<CartScreen> {
+
+  String name = "";
+  String phone = "";
+  String address = "";
+
+  bool loadingUser = true;
+
+  @override
+  void initState() {
+    super.initState();
+    fetchUserData();
+  }
+
+  // 🔥 Firestore থেকে user data আনা
+  Future<void> fetchUserData() async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser!.uid;
+
+      final doc = await FirebaseFirestore.instance
+          .collection("users")
+          .doc(uid)
+          .get();
+
+      if (doc.exists) {
+        setState(() {
+          name = doc["name"] ?? "";
+          phone = doc["mobile"] ?? "";
+          address = doc["address"] ?? "";
+          loadingUser = false;
+        });
+      }
+    } catch (e) {
+      print("User load error: $e");
+      setState(() => loadingUser = false);
+    }
+  }
 
   // ➕ Increase Qty
   void addItem(Map<String, dynamic> item) {
@@ -48,13 +86,9 @@ class _CartScreenState extends State<CartScreen> {
         centerTitle: true,
       ),
 
-      // 🛒 Body
       body: items.isEmpty
           ? Center(
-              child: Text(
-                "Cart is empty 😢",
-                style: TextStyle(fontSize: 16),
-              ),
+              child: Text("Cart is empty 😢"),
             )
           : ListView.builder(
               padding: EdgeInsets.all(10),
@@ -64,22 +98,14 @@ class _CartScreenState extends State<CartScreen> {
 
                 return Card(
                   margin: EdgeInsets.only(bottom: 10),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  elevation: 3,
                   child: Padding(
                     padding: EdgeInsets.all(12),
                     child: Row(
                       children: [
-
-                        // 🍔 Icon
                         Icon(Icons.fastfood,
                             size: 40, color: Colors.orange),
-
                         SizedBox(width: 10),
 
-                        // 📦 Product Info
                         Expanded(
                           child: Column(
                             crossAxisAlignment:
@@ -88,40 +114,28 @@ class _CartScreenState extends State<CartScreen> {
                               Text(
                                 item["name"],
                                 style: TextStyle(
-                                  fontSize: 16,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              SizedBox(height: 5),
                               Text("₹${item["price"]}"),
                             ],
                           ),
                         ),
 
-                        // ➕➖ Buttons
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.grey[100],
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Row(
-                            children: [
-                              IconButton(
-                                onPressed: () => removeItem(item),
-                                icon: Icon(Icons.remove,
-                                    color: Colors.red),
-                              ),
-                              Text(
-                                item["qty"].toString(),
-                                style: TextStyle(fontSize: 16),
-                              ),
-                              IconButton(
-                                onPressed: () => addItem(item),
-                                icon: Icon(Icons.add,
-                                    color: Colors.green),
-                              ),
-                            ],
-                          ),
+                        Row(
+                          children: [
+                            IconButton(
+                              onPressed: () => removeItem(item),
+                              icon: Icon(Icons.remove,
+                                  color: Colors.red),
+                            ),
+                            Text(item["qty"].toString()),
+                            IconButton(
+                              onPressed: () => addItem(item),
+                              icon: Icon(Icons.add,
+                                  color: Colors.green),
+                            ),
+                          ],
                         )
                       ],
                     ),
@@ -136,57 +150,56 @@ class _CartScreenState extends State<CartScreen> {
               padding: EdgeInsets.all(15),
               decoration: BoxDecoration(
                 color: Colors.orange,
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(15),
-                  topRight: Radius.circular(15),
+                borderRadius: BorderRadius.vertical(
+                  top: Radius.circular(15),
                 ),
               ),
-              child: Row(
-                mainAxisAlignment:
-                    MainAxisAlignment.spaceBetween,
-                children: [
-
-                  // 💰 Total
-                  Text(
-                    "Total: ₹${getTotalPrice()}",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-
-                  // 🚀 Checkout Button
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                    ),
-                    onPressed: () {
-
-                      // 🧑 Dummy customer data (later Firebase থেকে আনবে)
-                      String name = "Tapiul Miya";
-                      String phone = "9876543210";
-                      String address = "Kolkata, West Bengal";
-
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => CheckoutScreen(
-                            cartItems: widget.cartItems,
-                            name: name,
-                            phone: phone,
-                            address: address,
+              child: loadingUser
+                  ? Center(
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                      ),
+                    )
+                  : Row(
+                      mainAxisAlignment:
+                          MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          "Total: ₹${getTotalPrice()}",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                      );
-                    },
-                    child: Text(
-                      "Checkout",
-                      style: TextStyle(color: Colors.orange),
+
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                          ),
+                          onPressed: () {
+
+                            // 🔥 Firebase data pass হচ্ছে এখানে
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => CheckoutScreen(
+                                  cartItems: widget.cartItems,
+                                  name: name,
+                                  phone: phone,
+                                  address: address,
+                                ),
+                              ),
+                            );
+                          },
+                          child: Text(
+                            "Checkout",
+                            style: TextStyle(
+                              color: Colors.orange,
+                            ),
+                          ),
+                        )
+                      ],
                     ),
-                  )
-                ],
-              ),
             )
           : null,
     );
